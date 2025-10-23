@@ -1,0 +1,241 @@
+
+// Configuración
+const API_URL = "api.php"
+const UPDATE_INTERVAL = 1000 // 1 segundo
+
+// Función para dibujar gráfico semicircular (gauge)
+function drawGauge(canvasId, value, min, max, ranges) {
+  const canvas = document.getElementById(canvasId)
+  if (!canvas) return
+
+  const ctx = canvas.getContext("2d")
+  const centerX = canvas.width / 2
+  const centerY = canvas.height - 10
+  const radius = canvas.width / 2 - 20
+
+  // Limpiar canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  // Dibujar arco de fondo con rangos de colores
+  const startAngle = Math.PI
+  const endAngle = 2 * Math.PI
+
+  ranges.forEach((range) => {
+    const rangeStartAngle = startAngle + ((range.start - min) / (max - min)) * Math.PI
+    const rangeEndAngle = startAngle + ((range.end - min) / (max - min)) * Math.PI
+
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, radius, rangeStartAngle, rangeEndAngle)
+    ctx.lineWidth = 20
+    ctx.strokeStyle = range.color
+    ctx.stroke()
+  })
+
+  // Dibujar aguja
+  const valueAngle = startAngle + ((value - min) / (max - min)) * Math.PI
+  const needleLength = radius - 10
+
+  ctx.beginPath()
+  ctx.moveTo(centerX, centerY)
+  ctx.lineTo(centerX + Math.cos(valueAngle) * needleLength, centerY + Math.sin(valueAngle) * needleLength)
+  ctx.lineWidth = 3
+  ctx.strokeStyle = "#e2e8f0"
+  ctx.stroke()
+
+  // Dibujar punto central
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI)
+  ctx.fillStyle = "#60a5fa"
+  ctx.fill()
+}
+
+// Rangos para voltaje
+const voltageRanges = [
+  { start: 0, end: 50, color: "#ef4444" },
+  { start: 50, end: 110, color: "#eab308" },
+  { start: 110, end: 230, color: "#22c55e" },
+  { start: 230, end: 280, color: "#eab308" },
+  { start: 280, end: 300, color: "#ef4444" },
+]
+
+// Rangos para corriente
+const currentRanges = [
+  { start: 0, end: 10, color: "#22c55e" },
+  { start: 10, end: 20, color: "#eab308" },
+  { start: 20, end: 50, color: "#ef4444" },
+]
+
+// Función para actualizar el indicador de estado
+function updateStatusIndicator(level, voltage) {
+  const circle = document.getElementById(`status_circle_${level}`)
+  const text = document.getElementById(`status_text_${level}`)
+  
+  if (voltage > 50) {
+    circle.classList.remove('inactive')
+    circle.classList.add('active')
+    text.classList.remove('inactive')
+    text.classList.add('active')
+    text.textContent = 'Activo'
+  } else {
+    circle.classList.remove('active')
+    circle.classList.add('inactive')
+    text.classList.remove('active')
+    text.classList.add('inactive')
+    text.textContent = 'No Activo'
+  }
+}
+
+// Función para actualizar los datos
+async function updateData() {
+  try {
+    const response = await fetch(API_URL)
+    const data = await response.json()
+
+    // Actualizar voltajes y estados
+    for (let i = 1; i <= 3; i++) {
+      const voltage = data[`voltaje_${i}`] || 0
+      drawGauge(`voltaje_${i}`, voltage, 0, 300, voltageRanges)
+      document.getElementById(`voltaje_${i}_value`).textContent = `${voltage.toFixed(1)} V`
+      
+      // Actualizar indicador de estado
+      updateStatusIndicator(i, voltage)
+    }
+
+    // Actualizar corrientes
+    for (let i = 1; i <= 3; i++) {
+      const current = data[`corriente_${i}`] || 0
+      drawGauge(`corriente_${i}`, current, 0, 50, currentRanges)
+      document.getElementById(`corriente_${i}_value`).textContent = `${current.toFixed(1)} A`
+    }
+
+    // Actualizar potencias
+    for (let i = 1; i <= 3; i++) {
+      const power = data[`potencia_${i}`] || 0
+      document.getElementById(`potencia_${i}`).textContent = power.toFixed(0)
+    }
+
+    // Actualizar timestamp
+    document.getElementById("timestamp").textContent = data.timestamp || "--"
+  } catch (error) {
+    console.error("Error al obtener datos:", error)
+  }
+}
+
+// Función para dibujar el reloj analógico
+function drawClock() {
+  const canvas = document.getElementById("clock")
+  if (!canvas) return
+
+  const ctx = canvas.getContext("2d")
+  const centerX = canvas.width / 2
+  const centerY = canvas.height / 2
+  const radius = canvas.width / 2 - 5
+
+  const now = new Date()
+  const argTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
+  
+  const hours = argTime.getHours() % 12
+  const minutes = argTime.getMinutes()
+  const seconds = argTime.getSeconds()
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
+  ctx.fillStyle = "rgba(15, 23, 42, 0.8)"
+  ctx.fill()
+  ctx.strokeStyle = "#60a5fa"
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  for (let i = 0; i < 12; i++) {
+    const angle = ((i * 30 - 90) * Math.PI) / 180
+    const x1 = centerX + Math.cos(angle) * (radius - 10)
+    const y1 = centerY + Math.sin(angle) * (radius - 10)
+    const x2 = centerX + Math.cos(angle) * (radius - 5)
+    const y2 = centerY + Math.sin(angle) * (radius - 5)
+
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.strokeStyle = "#94a3b8"
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+
+  const hourAngle = (((hours + minutes / 60) * 30 - 90) * Math.PI) / 180
+  ctx.beginPath()
+  ctx.moveTo(centerX, centerY)
+  ctx.lineTo(centerX + Math.cos(hourAngle) * (radius * 0.5), centerY + Math.sin(hourAngle) * (radius * 0.5))
+  ctx.strokeStyle = "#e2e8f0"
+  ctx.lineWidth = 3
+  ctx.stroke()
+
+  const minuteAngle = (((minutes + seconds / 60) * 6 - 90) * Math.PI) / 180
+  ctx.beginPath()
+  ctx.moveTo(centerX, centerY)
+  ctx.lineTo(centerX + Math.cos(minuteAngle) * (radius * 0.7), centerY + Math.sin(minuteAngle) * (radius * 0.7))
+  ctx.strokeStyle = "#60a5fa"
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  const secondAngle = ((seconds * 6 - 90) * Math.PI) / 180
+  ctx.beginPath()
+  ctx.moveTo(centerX, centerY)
+  ctx.lineTo(centerX + Math.cos(secondAngle) * (radius * 0.8), centerY + Math.sin(secondAngle) * (radius * 0.8))
+  ctx.strokeStyle = "#ef4444"
+  ctx.lineWidth = 1
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, 4, 0, 2 * Math.PI)
+  ctx.fillStyle = "#60a5fa"
+  ctx.fill()
+}
+
+// Mostrar hora numérica al pasar el mouse
+function mostrarHoraNumerica(event) {
+  const now = new Date()
+  const argTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }))
+  const horas = argTime.getHours().toString().padStart(2, "0")
+  const minutos = argTime.getMinutes().toString().padStart(2, "0")
+  const segundos = argTime.getSeconds().toString().padStart(2, "0")
+
+  let tooltip = document.getElementById("clockTooltip")
+  if (!tooltip) {
+    tooltip = document.createElement("div")
+    tooltip.id = "clockTooltip"
+    tooltip.style.position = "absolute"
+    tooltip.style.background = "rgba(15,23,42,0.9)"
+    tooltip.style.color = "#60a5fa"
+    tooltip.style.padding = "6px 10px"
+    tooltip.style.borderRadius = "6px"
+    tooltip.style.fontFamily = "monospace"
+    tooltip.style.fontSize = "1rem"
+    tooltip.style.pointerEvents = "none"
+    tooltip.style.zIndex = "999"
+    document.body.appendChild(tooltip)
+  }
+
+  tooltip.textContent = `${horas}:${minutos}:${segundos}`
+  tooltip.style.left = event.pageX + 10 + "px"
+  tooltip.style.top = event.pageY + 10 + "px"
+  tooltip.style.display = "block"
+}
+
+function ocultarHoraNumerica() {
+  const tooltip = document.getElementById("clockTooltip")
+  if (tooltip) tooltip.style.display = "none"
+}
+
+const clockCanvas = document.getElementById("clock")
+if (clockCanvas) {
+  clockCanvas.addEventListener("mousemove", mostrarHoraNumerica)
+  clockCanvas.addEventListener("mouseleave", ocultarHoraNumerica)
+}
+
+// Inicializar
+updateData()
+drawClock()
+
+setInterval(updateData, UPDATE_INTERVAL)
